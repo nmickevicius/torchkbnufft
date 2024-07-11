@@ -23,7 +23,7 @@ from ._math import (
 )
 from ._nufft import utils as nufft_utils
 from ._nufft.dcomp import calc_density_compensation_function
-from ._nufft.spmat import calc_tensor_spmatrix
+from ._nufft.spmat import calc_tensor_spmatrix, calc_lowrank_spmatrix
 from ._nufft.toep import calc_toeplitz_kernel
 from .modules import KbInterp, KbInterpAdjoint, KbNufft, KbNufftAdjoint, ToepNufft
 

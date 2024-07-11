@@ -3,9 +3,75 @@ from typing import Optional, Sequence, Tuple, Union
 import numpy as np
 import torch
 from torch import Tensor
-
+import scipy.sparse as scsp
 from .utils import build_numpy_spmatrix, validate_args
 
+def calc_lowrank_spmatrix(
+    omega: Tensor,
+    U: Tensor,
+    im_size: Sequence[int],
+    grid_size: Optional[Sequence[int]] = None,
+    numpoints: Union[int, Sequence[int]] = 6,
+    n_shift: Optional[Sequence[int]] = None,
+    table_oversamp: Union[int, Sequence[int]] = 2 ** 10,
+    kbwidth: float = 2.34,
+    order: Union[float, Sequence[float]] = 0.0,
+) -> Tuple[Tensor, Tensor]:
+    if not omega.ndim == 2:
+        raise ValueError("Sparse matrix calculation not implemented for batched omega.")
+    (
+        im_size,
+        grid_size,
+        numpoints,
+        n_shift,
+        table_oversamp,
+        order,
+        alpha,
+        dtype,
+        device,
+    ) = validate_args(
+        im_size,
+        grid_size,
+        numpoints,
+        n_shift,
+        table_oversamp,
+        kbwidth,
+        order,
+        omega.dtype,
+        omega.device,
+    )
+    coo = build_numpy_spmatrix(
+        omega=omega.cpu().numpy(),
+        numpoints=numpoints,
+        im_size=im_size,
+        grid_size=grid_size,
+        n_shift=n_shift,
+        order=order,
+        alpha=alpha,
+    )
+
+    # calculate product of U*G
+    # as in Asslaender et. al. MRM (2017)
+    UG = []
+    for k in range(U.shape[-1]):
+        ug = coo.multiply(U[:,:,k].detach().cpu().numpy())
+        UG.append(ug)
+    UG = scsp.coo_matrix(scsp.hstack(UG))
+
+    values = UG.data
+    indices = np.stack((UG.row, UG.col))
+
+    inds = torch.tensor(indices, dtype=torch.long, device=device)
+    real_vals = torch.tensor(np.real(values), dtype=dtype, device=device)
+    imag_vals = torch.tensor(np.imag(values), dtype=dtype, device=device)
+    shape = UG.shape
+
+    interp_mats = (
+        torch.sparse_coo_tensor(inds, real_vals, torch.Size(shape), device=device),
+        torch.sparse_coo_tensor(inds, imag_vals, torch.Size(shape), device=device),
+    )
+
+    return interp_mats
 
 def calc_tensor_spmatrix(
     omega: Tensor,
