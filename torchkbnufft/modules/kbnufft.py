@@ -408,6 +408,42 @@ class KbNufftAdjoint(KbNufftModule):
             output = torch.view_as_real(output)
 
         return output
+    
+class KbNufftAdjointSMS(KbNufftModule):
+    # data - [batch]
+    def forward(
+        self,
+        data: Tensor,
+        omega: Tensor,
+        phi: Tensor,
+        interp_mats: Optional[Tuple[Tensor, Tensor]] = None,
+        smaps: Optional[Tensor] = None,
+        norm: Optional[str] = None,
+    ) -> Tensor:
+        # data - [batch (e.g., frames), coils, nmeas (e.g., spokes*nreadout)]
+
+        # for now, we will use interp_mats 
+        assert interp_mats is not None, "must provide interp_mats"
+
+        assert isinstance(self.scaling_coef, Tensor)
+        assert isinstance(self.im_size, Tensor)
+        assert isinstance(self.grid_size, Tensor)
+
+
+        GPH_real = torch.cat([interp_mats[0] * phi[s] for s in range(nsms)], dim=-1)
+        GPH_imag = torch.cat([interp_mats[1] * phi[s] for s in range(nsms)], dim=-1).permute(0,2,1)
+
+        
+
+        output = tkbnF.kb_spmat_nufft_adjoint(
+            data=data,
+            scaling_coef=self.scaling_coef,
+            im_size=self.im_size,
+            grid_size=self.grid_size,
+            interp_mats=interp_mats,
+            norm=norm,
+        )
+    
 
 
 class ToepNufft(torch.nn.Module):
